@@ -76,3 +76,4 @@ long_agg = CSV.read("../long_agg_100km.csv", DataFrame)
 long_agg = long_agg[long_agg.distance_bin.>0, :]
 long_agg.prediction = [predict_long(row.distance_bin, row.IBD_LEFT, row.IBD_RIGHT) for row in eachrow(long_agg)]
 CSV.write("long_predictions.csv", long_agg)
+

@@ -27,3 +27,4 @@ CSV.write("short_agg_10km.csv", df_agg_short)
 df_long = CSV.read("long_data.csv", DataFrame)
 df_agg_long = aggregate_by_distance(df_long, 100)
 CSV.write("long_agg_100km.csv", df_agg_long)
+
