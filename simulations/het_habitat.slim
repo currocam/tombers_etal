@@ -1,0 +1,96 @@
+initialize() {
+	initializeSLiMOptions(dimensionality="xy");
+	initializeTreeSeq();
+	initializeMutationType("m1", 0.5, "f", 0.0);
+	initializeGenomicElementType("g1", m1, 1.0);
+	// Simulate a 1 Morgan chromosome
+	initializeGenomicElement(g1, 0, 1e8 - 1);
+	initializeRecombinationRate(1e-8);
+	initializeMutationRate(0.0);
+	// Define constants:
+	defineConstantIfInteractive("NE", 1000); // Number of individuals
+	defineConstantIfInteractive("SM", 0.01); // Mate choice
+	defineConstantIfInteractive("SD", 0.5); // Dispersal
+	// Set up spatial interaction type
+	// We use a Gaussian kernel to choose a mate
+	initializeInteractionType(1, "xy", reciprocal=T, maxDistance=SM*3);
+	i1.setInteractionFunction("n", 1.0, SM);
+	defineConstant("RUNTIME", 20000);
+	defineConstant("GRANULARITY", 200);
+	defineGlobal("EMPIRICAL_DENSITY", float(RUNTIME));
+	defineGlobal("EMPIRICAL_DISPERSAL", float(RUNTIME));
+	defineConstantIfInteractive("OUTPATH", "out.trees");
+
+}
+
+mateChoice() {
+	// Spatial mate choice based on interaction strength
+	return i1.strength(individual);
+}
+
+modifyChild() {
+	pos = child.spatialPosition;
+	child.setSpatialPosition(p1.pointDeviated(1, pos, "reprising", INF, "n", SD));
+	pos = child.spatialPosition;
+	prev = sample(c(parent1, parent2), 1).spatialPosition;
+	child.tagF = sqrt(sum((prev-pos)^2));
+	return T;
+}
+
+
+
+1 early() {
+	sim.addSubpop("p1", NE);
+	p1.setSpatialBounds(c(-1, -1, 1, 1));
+	// Simple squared-like area
+	n = GRANULARITY * GRANULARITY;
+	habitat_suitability = ifelse(runif(n)<0.99, 0.0, 1.0);
+	habitat_suitability = matrix(habitat_suitability, ncol=GRANULARITY);
+	map = p1.defineSpatialMap("mapHabitat", "xy", habitat_suitability, interpolate=T,
+		valueRange=c(0.0, 1.0), colors=c("white", "black"));
+	defineConstant("HABITAT_MAP", map);
+	defineConstant("FRACTION_SUITABILITY", mean(habitat_suitability));
+	p1.individuals.setSpatialPosition(p1.pointUniformWithMap(NE, HABITAT_MAP));
+	i1.evaluate(p1);
+}
+
+
+1: late() {
+	inds = p1.individuals;
+	prevPos = inds.spatialPosition;
+	// make a density map: 0 is empty, 1 is maximum density
+	density = summarizeIndividuals(inds, c(10, 10), p1.spatialBounds ,
+		operation="individuals.size();", empty=0.0, perUnitArea=T);
+	p1.defineSpatialMap("density", "xy", density, F,
+		range(density), c("black", "orange", "red"));
+	EMPIRICAL_DENSITY[sim.cycle-1] = 	mean(density);
+	EMPIRICAL_DISPERSAL[sim.cycle-1] = 	mean(inds.tagF);
+
+}
+
+2: first() {
+	i1.evaluate(p1);
+
+}
+
+RUNTIME late() {
+	// We have to account for differences between the dispersal gestating mate - offspring
+	// and the non-gestating mate - offspring
+	defineConstant("EXP_SIGMA", sqrt(SD^2 + SM^2 / 2));
+	defineConstant("OBS_SIGMA", mean(EMPIRICAL_DISPERSAL));
+	area = (p1.spatialBounds[2] - p1.spatialBounds[0]) * (p1.spatialBounds[3] - p1.spatialBounds[1]);
+	defineConstant("EXP_D", NE / area);
+	defineConstant("OBS_D", mean(EMPIRICAL_DENSITY));
+
+	sim.treeSeqOutput(
+		OUTPATH,
+		metadata=Dictionary(
+			"EXP_SIGMA", EXP_SIGMA, "OBS_SIGMA", OBS_SIGMA,
+			"EXP_D", EXP_D, "OBS_D", OBS_D,
+			"FRACTION_SUITABILITY", FRACTION_SUITABILITY)
+		);
+}
+
+function (void)defineConstantIfInteractive(string$ symbol, * value){
+	if (exists("slimgui")) defineConstant(symbol, value);
+}
