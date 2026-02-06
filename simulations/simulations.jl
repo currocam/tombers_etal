@@ -39,20 +39,20 @@ end
     tskit = pyimport("tskit")
     ts = tskit.load(outpath)
     pyslim = pyimport("pyslim")
-    ts = pyslim.recapitate(ts, ancestral_Ne = NE, recombination_rate = 1e-8);
+    ts = pyslim.recapitate(ts, ancestral_Ne=NE, recombination_rate=1e-8)
 
     # Sample 100 diploid individuals
     rng = MersenneTwister(seed)
     n_samples = 100
     sampled = randperm(rng, ts.num_individuals)[1:n_samples] .- 1
     nodes = reduce(vcat, [ts.individual(i).nodes for i in sampled])
-    ts = ts.simplify(samples = nodes)
+    ts = ts.simplify(samples=nodes)
 
     df_dist = let
         points = reduce(hcat, [collect(row) for row in ts.individual_locations])'
         dist_matrix = euclidean_distance(points)
         n = size(points, 1)
-        df = DataFrame(ID1 = Int[], ID2 = Int[], distance = Float64[])
+        df = DataFrame(ID1=Int[], ID2=Int[], distance=Float64[])
         for i = 1:n
             for j = (i+1):n
                 push!(df, (i - 1, j - 1, dist_matrix[i, j]))
@@ -65,16 +65,16 @@ end
     df_ibds = let
         function blocks(i, j)
             ibds = ts.ibd_segments(
-                between = [ts.individual(i).nodes, ts.individual(j).nodes],
-                min_span = 1 / 100 * 4 * 1e8,
-                store_pairs = true,
-                store_segments = true,
+                between=[ts.individual(i).nodes, ts.individual(j).nodes],
+                min_span=1 / 100 * 4 * 1e8,
+                store_pairs=true,
+                store_segments=true,
             )
             spans = [
                 (block.right - block.left) / 1e8 for pair in ibds for
                 block in ibds.get(pair)
             ]
-            DataFrame(ID1 = i, ID2 = j, span = spans)
+            DataFrame(ID1=i, ID2=j, span=spans)
         end
         vcat([blocks(i, j) for i = 0:(n_samples-1) for j = (i+1):(n_samples-1)]...)
     end
@@ -83,7 +83,7 @@ end
     bins, min_threshold = default_ibd_bins()
     df_preprocessed = preprocess_dataset(df_ibds, df_dist, bins, min_threshold)
     df2 = let
-        h = fit(Histogram, df_preprocessed.DISTANCE, nbins = 20)
+        h = fit(Histogram, df_preprocessed.DISTANCE, nbins=50)
         df_preprocessed.DISTANCE_INDEX =
             cut(df_preprocessed.DISTANCE, collect(h.edges[1]))
         combine(
@@ -118,7 +118,44 @@ end
 
     contig_lengths = [1.0]
     m = constant_density(df2, contig_lengths)
-    mle_estimate = maximum_a_posteriori(m)
+
+    # Run MLE from 5 different starting points and keep the best
+    n_starts = 5
+    best_mle = nothing
+    best_lp = -Inf
+    for i in 1:n_starts
+        try
+            # Use random initial values within the prior bounds
+            init_D = rand(rng) * 5000
+            init_σ = rand(rng) * 500
+            mle_result = maximum_a_posteriori(m; initial_params=[init_D, init_σ])
+            lp = mle_result.lp
+            if lp > best_lp
+                best_lp = lp
+                best_mle = mle_result
+            end
+        catch e
+            @warn "MLE attempt $i failed: $e"
+        end
+    end
+
+    if best_mle === nothing
+        error("All MLE attempts failed")
+    end
+    mle_estimate = best_mle
+
+    # Check if estimates are at the bounds
+    coef_table = mle_estimate |> coeftable |> DataFrame
+    D_est = coef_table[1, "Coef."]
+    σ_est = coef_table[2, "Coef."]
+
+    bound_tol = 1e-3  # Tolerance for boundary check
+    if D_est < bound_tol || D_est > 5000 - bound_tol
+        error("D estimate ($D_est) is at the boundary of the prior [0, 5000]")
+    end
+    if σ_est < bound_tol || σ_est > 500 - bound_tol
+        error("σ estimate ($σ_est) is at the boundary of the prior [0, 500]")
+    end
 
     # Extract coefficient table with standard errors
     coef_table = mle_estimate |> coeftable |> DataFrame
@@ -158,14 +195,14 @@ function main()
     # Generate all parameter combinations
     # Each combination gets a unique seed based on parameters
     params = [
-        (NE = ne, SD = sd, SM = SM, seed = base_seed + i + j * 100) for
+        (NE=ne, SD=sd, SM=SM, seed=base_seed + i + j * 100) for
         (i, sd) in enumerate(kernels_sd) for (j, ne) in enumerate(Ne_values)
     ]
 
     @info "Starting $(length(params)) simulations across $(nprocs()-1) workers"
     @info "Parameter space: $(length(Ne_values)) NE values × $(length(kernels_sd)) SD values"
 
-    results = pmap(params; on_error = identity) do p
+    results = pmap(params; on_error=identity) do p
         @info "Worker $(myid()): Running NE=$(p.NE), SD=$(p.SD)"
         simulation(p.NE, p.SD, p.SM, p.seed)
     end
