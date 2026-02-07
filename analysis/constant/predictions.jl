@@ -9,7 +9,8 @@ contig_lengths = [0.57, 0.64, 0.52, 0.55, 0.49, 0.53, 0.52, 0.52, 0.57, 0.56, 0.
 De(t, params) = params[1] # Custom De(t) parametrization
 grid_times = 1:100
 L = 0.04 # Smallest IBD block considered
-grid_r = [2.5, 20, 180] # Geographic distances in km
+grid_r1 = [2.5, 20, 180] # Geographic distances in km
+grid_r2 = [100, 1000, 2000] # Geographic distances in km
 
 # Extract MLE parameters
 mle_short_D = mle_short[1, "Coef."]
@@ -25,7 +26,7 @@ predictions = DataFrame(
     density=Float64[]
 )
 
-for r in grid_r
+for r in grid_r1
     # scale format predictions
     dens_short = age_density_ibd_blocks_custom(
         grid_times,
@@ -39,21 +40,24 @@ for r in grid_r
     for (i, t) in enumerate(grid_times)
         push!(predictions, (time=t, distance_km=r, scale="short", density=dens_short[i]))
     end
+end
 
-    # Long scale predictions
-    dens_long = age_density_ibd_blocks_custom(
+for r in grid_r2
+    # scale format predictions
+    dens_short = age_density_ibd_blocks_custom(
         grid_times,
         r,
         De,
-        [mle_long_D],
-        mle_long_sigma,
+        [mle_short_D],
+        mle_short_sigma,
         L,
         contig_lengths
     )
     for (i, t) in enumerate(grid_times)
-        push!(predictions, (time=t, distance_km=r, scale="long", density=dens_long[i]))
+        push!(predictions, (time=t, distance_km=r, scale="short", density=dens_short[i]))
     end
 end
+
 # Save the tidy predictions dataframe
 CSV.write("predictions_age_ibd.csv", predictions)
 
