@@ -15,7 +15,7 @@ function aggregate_by_distance(df, bin_size_km)
         end
         (; mean=m, std=std(boots), n=n, lower=quantile(boots, 0.025), upper=quantile(boots, 0.975))
     end
-    filter(row -> row.mean > 1e-3 && row.n > 1 && row.lower > 0, df_agg)
+    #filter(row -> row.mean > 1e-3 && row.n > 1 && row.lower > 0, df_agg)
 end
 
 df_short = CSV.read("short_data.csv", DataFrame)
