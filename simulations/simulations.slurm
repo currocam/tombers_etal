@@ -2,7 +2,7 @@
 #SBATCH --job-name=large_scale
 #SBATCH --output=logs/large_scale_%j.out
 #SBATCH --error=logs/large_scale_%j.err
-#SBATCH --time=1:00:00
+#SBATCH --time=4:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=24
 
