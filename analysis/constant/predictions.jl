@@ -48,13 +48,13 @@ for r in grid_r2
         grid_times,
         r,
         De,
-        [mle_short_D],
-        mle_short_sigma,
+        [mle_long_D],
+        mle_long_sigma,
         L,
         contig_lengths
     )
     for (i, t) in enumerate(grid_times)
-        push!(predictions, (time=t, distance_km=r, scale="short", density=dens_short[i]))
+        push!(predictions, (time=t, distance_km=r, scale="long", density=dens_short[i]))
     end
 end
 
