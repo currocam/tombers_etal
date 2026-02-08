@@ -15,7 +15,7 @@ initialize() {
 	// Individuals within a small radious can mate
 	initializeInteractionType(1, "xy", reciprocal=T, maxDistance=SM);
 	i1.setInteractionFunction("f", 1.0);
-	defineConstant("RUNTIME", 20000);
+	defineConstant("RUNTIME", 10000);
 	defineConstant("GRANULARITY", 200);
 	defineGlobal("EMPIRICAL_DENSITY", float(RUNTIME));
 	defineGlobal("EMPIRICAL_DISPERSAL", float(RUNTIME));

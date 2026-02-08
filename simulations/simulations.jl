@@ -190,9 +190,6 @@ end
     end
     mle_estimate = best_mle
 
-    # Check if estimates are at the bounds
-    coef_table = mle_estimate |> coeftable |> DataFrame
-
     # Extract coefficient table with standard errors
     coef_table = mle_estimate |> coeftable |> DataFrame
     D_row = coef_table[1, :]
@@ -227,6 +224,7 @@ function main()
     kernels_sd = exp10.(range(log10(0.05), stop=log10(6.0), length=40))
     # Spatial mating scale
     SM = 0.01
+    num_replicates = 3
     base_seed = 1000
 
     mkpath(OUTPUT_DIR)
@@ -234,16 +232,18 @@ function main()
     # Generate all parameter combinations
     # Each combination gets a unique seed based on parameters
     params = [
-        (NE=ne, SD=sd, SM=SM, seed=base_seed + i + j * 100) for
-        (i, sd) in enumerate(kernels_sd) for (j, ne) in enumerate(Ne_values)
+        (NE=ne, SD=sd, SM=SM, seed=base_seed + i + j * 100 + k * 10000, replicate=k) for
+        (i, sd) in enumerate(kernels_sd) for (j, ne) in enumerate(Ne_values) for k in 1:num_replicates
     ]
 
     @info "Starting $(length(params)) simulations across $(nprocs()-1) workers"
-    @info "Parameter space: $(length(Ne_values)) NE values × $(length(kernels_sd)) SD values"
+    @info "Parameter space: $(length(Ne_values)) NE values × $(length(kernels_sd)) SD values × $(num_replicates) replicates"
 
     results = pmap(params; on_error=identity) do p
-        @info "Worker $(myid()): Running NE=$(p.NE), SD=$(p.SD)"
-        simulation(p.NE, p.SD, p.SM, p.seed)
+        @info "Worker $(myid()): Running NE=$(p.NE), SD=$(p.SD), replicate=$(p.replicate)"
+        df = simulation(p.NE, p.SD, p.SM, p.seed)
+        df.replicate .= p.replicate
+        df
     end
 
     # Handle any errors that were returned
@@ -254,17 +254,24 @@ function main()
             push!(
                 valid_results,
                 DataFrame(
+                    :D_obs => NaN,
+                    :D_exp => NaN,
+                    :D_est => NaN,
+                    :D_std_error => NaN,
+                    :σ_obs => NaN,
+                    :σ_exp => NaN,
+                    :σ_est => NaN,
+                    :σ_std_error => NaN,
+                    :status => "exception: $(sprint(showerror, r))",
                     :NE => params[i].NE,
                     :SD => params[i].SD,
                     :SM => params[i].SM,
                     :seed => params[i].seed,
-                    :D_truth => NaN,
-                    :D_estimate => NaN,
-                    :D_std_error => NaN,
-                    :σ_truth => NaN,
-                    :σ_estimate => NaN,
-                    :σ_std_error => NaN,
-                    :status => "exception: $(sprint(showerror, r))",
+                    :sample_size => 0,
+                    :max_distance => NaN,
+                    :min_distance => NaN,
+                    :mean_axial_distance => NaN,
+                    :replicate => params[i].replicate,
                 ),
             )
         else
