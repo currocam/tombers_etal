@@ -12,6 +12,22 @@ function euclidean_distance(points)
     return dist_matrix
 end
 
+function mean_axial_distance(points)
+    coords = points[:, 1:2]
+    n = size(coords, 1)
+    acc = 0.0
+    counter = 0
+    for i = 1:n
+        for j = i+1:n
+            dx = coords[i, 1] - coords[j, 1]
+            dy = coords[i, 2] - coords[j, 2]
+            acc += sqrt(dx^2) + sqrt(dy^2)
+            counter += 2
+        end
+    end
+    return acc / counter
+end
+
 function cut(values, edges)
     n = length(values)
     bins = Vector{Float64}(undef, n)

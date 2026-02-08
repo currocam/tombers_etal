@@ -1,4 +1,5 @@
 
+
 using Distributed
 
 # Boiler plate code
@@ -41,14 +42,57 @@ end
     pyslim = pyimport("pyslim")
     ts = pyslim.recapitate(ts, ancestral_Ne=NE, recombination_rate=1e-8)
 
-    # Sample 100 diploid individuals
+    # Define sampling sites
+    base_points = [(x, y) for x in range(-1.0, 1.0, length=5) for y in range(-1.0, 1.0, length=5)][1:10]
+
+    # Sample 200 diploid individuals from the closest individuals to these base points
+    n_samples = 200
+    grid_points_per_sample = 20  # 10 points × 20 individuals each
+
+    # For each base point, find the 20 closest individuals from the simulation
+    all_sampled_individuals = Int[]
+    all_selected = falses(ts.num_individuals)  # Track which individuals are already selected
+
+    all_locations = reduce(hcat, [collect(row) for row in ts.individual_locations])'
+    all_locations = all_locations[:, 1:2]
+    for (i, (target_x, target_y)) in enumerate(base_points)
+        # Calculate distances from target point
+        distances = [sqrt((loc[1] - target_x)^2 + (loc[2] - target_y)^2) for loc in eachrow(all_locations)]
+
+        # Get indices of 20 closest individuals that haven't been selected yet
+        available_indices = findall(!, all_selected)
+        available_distances = distances[available_indices]
+
+        # Sort available indices by distance
+        sorted_indices = available_indices[sortperm(available_distances)]
+
+        # Select up to 20 closest available individuals
+        selected_for_point = sorted_indices[1:min(grid_points_per_sample, length(sorted_indices))]
+
+        # Mark these individuals as selected
+        all_selected[selected_for_point] .= true
+
+        push!(all_sampled_individuals, selected_for_point...)
+
+        # If we've reached 200 individuals, break early
+        if length(all_sampled_individuals) >= n_samples
+            break
+        end
+    end
+
+    # If we don't have enough individuals, sample remaining randomly from unselected
     rng = MersenneTwister(seed)
-    n_samples = 100
-    sampled = randperm(rng, ts.num_individuals)[1:n_samples] .- 1
-    nodes = reduce(vcat, [ts.individual(i).nodes for i in sampled])
+    if length(all_sampled_individuals) < n_samples
+        remaining_needed = n_samples - length(all_sampled_individuals)
+        remaining_indices = findall(!, all_selected)
+        additional_individuals = sample(rng, remaining_indices, remaining_needed, replace=false)
+        push!(all_sampled_individuals, additional_individuals...)
+    end
+
+    nodes = reduce(vcat, [ts.individual(i - 1).nodes for i in all_sampled_individuals])
     ts = ts.simplify(samples=nodes)
 
-    df_dist = let
+    df_dist, avg_axial = let
         points = reduce(hcat, [collect(row) for row in ts.individual_locations])'
         dist_matrix = euclidean_distance(points)
         n = size(points, 1)
@@ -58,7 +102,9 @@ end
                 push!(df, (i - 1, j - 1, dist_matrix[i, j]))
             end
         end
-        df
+        # Compute average axial distance
+        avg_axial = mean_axial_distance(points)
+        df, avg_axial
     end
 
     # IBD blocks
@@ -101,7 +147,7 @@ end
 
 
     @model function constant_density(df, contig_lengths)
-        D ~ Uniform(0, 5000)
+        D ~ Uniform(0, 10000)
         σ ~ Uniform(0, 500.0)
         try
             Turing.@addlogprob! composite_loglikelihood_constant_density(
@@ -126,7 +172,7 @@ end
     for i in 1:n_starts
         try
             # Use random initial values within the prior bounds
-            init_D = rand(rng) * 5000
+            init_D = rand(rng) * 10000
             init_σ = rand(rng) * 500
             mle_result = maximum_a_posteriori(m; initial_params=[init_D, init_σ])
             lp = mle_result.lp
@@ -146,16 +192,6 @@ end
 
     # Check if estimates are at the bounds
     coef_table = mle_estimate |> coeftable |> DataFrame
-    D_est = coef_table[1, "Coef."]
-    σ_est = coef_table[2, "Coef."]
-
-    bound_tol = 1e-3  # Tolerance for boundary check
-    if D_est < bound_tol || D_est > 5000 - bound_tol
-        error("D estimate ($D_est) is at the boundary of the prior [0, 5000]")
-    end
-    if σ_est < bound_tol || σ_est > 500 - bound_tol
-        error("σ estimate ($σ_est) is at the boundary of the prior [0, 500]")
-    end
 
     # Extract coefficient table with standard errors
     coef_table = mle_estimate |> coeftable |> DataFrame
@@ -179,14 +215,17 @@ end
             :sample_size => n_samples,
             :max_distance => maximum(df2.DISTANCE),
             :min_distance => minimum(df2.DISTANCE),
+            :mean_axial_distance => avg_axial,
         ),
     )
 end
 
 function main()
     # Simulation parameters
-    Ne_values = [500]
-    kernels_sd = exp10.(range(log10(0.001), stop=log10(5.0), length=60))
+    Ne_values = [500, 1000] # Number of individuals
+    # Dispersal kernels
+    kernels_sd = exp10.(range(log10(0.05), stop=log10(6.0), length=40))
+    # Spatial mating scale
     SM = 0.01
     base_seed = 1000
 

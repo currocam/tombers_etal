@@ -8,13 +8,13 @@ initialize() {
 	initializeRecombinationRate(1e-8);
 	initializeMutationRate(0.0);
 	// Define constants:
-	defineConstantIfInteractive("NE", 1000); // Number of individuals
+	defineConstantIfInteractive("NE", 500); // Number of individuals
 	defineConstantIfInteractive("SM", 0.01); // Mate choice
-	defineConstantIfInteractive("SD", 0.5); // Dispersal
+	defineConstantIfInteractive("SD", 0.2); // Dispersal
 	// Set up spatial interaction type
-	// We use a Gaussian kernel to choose a mate
-	initializeInteractionType(1, "xy", reciprocal=T, maxDistance=SM*3);
-	i1.setInteractionFunction("n", 1.0, SM);
+	// Individuals within a small radious can mate
+	initializeInteractionType(1, "xy", reciprocal=T, maxDistance=SM);
+	i1.setInteractionFunction("f", 1.0);
 	defineConstant("RUNTIME", 20000);
 	defineConstant("GRANULARITY", 200);
 	defineGlobal("EMPIRICAL_DENSITY", float(RUNTIME));
@@ -58,19 +58,9 @@ modifyChild() {
 1: late() {
 	inds = p1.individuals;
 	prevPos = inds.spatialPosition;
-	// make a density map: 0 is empty, 1 is maximum density
-	density = summarizeIndividuals(inds, c(10, 10), p1.spatialBounds ,
-		operation="individuals.size();", empty=0.0, perUnitArea=T);
-	p1.defineSpatialMap("density", "xy", density, F,
-		range(density), c("black", "orange", "red"));
-	EMPIRICAL_DENSITY[sim.cycle-1] = 	mean(density);
-	EMPIRICAL_DISPERSAL[sim.cycle-1] = 	mean(inds.tagF);
-
-}
-
-2: first() {
 	i1.evaluate(p1);
-
+	EMPIRICAL_DENSITY[sim.cycle-1] =  mean(i1.localPopulationDensity(p1.individuals));
+	EMPIRICAL_DISPERSAL[sim.cycle-1] = 	mean(inds.tagF);
 }
 
 RUNTIME late() {
