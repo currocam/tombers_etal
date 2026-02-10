@@ -1,5 +1,3 @@
-
-
 using Distributed
 
 # Boiler plate code
@@ -8,7 +6,7 @@ if haskey(ENV, "SLURM_CPUS_PER_TASK")
     addprocs(n_workers)
     @info "Added $n_workers workers from SLURM allocation"
 else
-    addprocs(1)  # Add workers based on available cores
+    addprocs(8)  # Add workers based on available cores
     @info "Running locally"
 end
 
@@ -18,6 +16,7 @@ end
     using Random
     using DataFrames
     using StatsBase
+    using LinearAlgebra
     using IdentityByDescentDispersal
     using Turing
     using CSV
@@ -27,11 +26,12 @@ end
     const OUTPUT_DIR = "steps"
 end
 
-@everywhere function simulation(NE, SD, SM, seed)
+@everywhere function simulation(NE, SD, SM, SCALE, seed)
     # Create unique output path using worker ID and parameters to avoid conflicts
     worker_id = myid()
-    unique_id = "$(NE)_$(SD)_$(SM)_$(seed)_w$(worker_id)"
+    unique_id = "$(NE)_$(SD)_$(SM)_$(SCALE)_$(seed)_w$(worker_id)"
     outpath = joinpath(OUTPUT_DIR, "het_habitat_$(unique_id).trees")
+    rng = MersenneTwister(seed)
     run(
         `$SLIM_BINARY -p -s $seed -d NE=$NE -d SD=$SD -d SM=$SM -d OUTPATH="\"$outpath\"" $SLIM_FILE`,
     )
@@ -42,57 +42,33 @@ end
     pyslim = pyimport("pyslim")
     ts = pyslim.recapitate(ts, ancestral_Ne=NE, recombination_rate=1e-8)
 
-    # Define sampling sites
-    base_points = [(x, y) for x in range(-1.0, 1.0, length=5) for y in range(-1.0, 1.0, length=5)][1:10]
+    # Sample randomly from individuals within a square centered at the origin
+    n_samples = 100
 
-    # Sample 200 diploid individuals from the closest individuals to these base points
-    n_samples = 200
-    grid_points_per_sample = 20  # 10 points × 20 individuals each
-
-    # For each base point, find the 20 closest individuals from the simulation
-    all_sampled_individuals = Int[]
-    all_selected = falses(ts.num_individuals)  # Track which individuals are already selected
-
+    # Get all individual locations
     all_locations = reduce(hcat, [collect(row) for row in ts.individual_locations])'
     all_locations = all_locations[:, 1:2]
-    for (i, (target_x, target_y)) in enumerate(base_points)
-        # Calculate distances from target point
-        distances = [sqrt((loc[1] - target_x)^2 + (loc[2] - target_y)^2) for loc in eachrow(all_locations)]
 
-        # Get indices of 20 closest individuals that haven't been selected yet
-        available_indices = findall(!, all_selected)
-        available_distances = distances[available_indices]
+    # Center the locations
+    mean_pos = mean(all_locations, dims=1)
+    centered_locations = all_locations .- mean_pos
 
-        # Sort available indices by distance
-        sorted_indices = available_indices[sortperm(available_distances)]
+    # Find individuals within the square centered at origin ([-SCALE, SCALE] x [-SCALE, SCALE])
+    within_square = findall(row -> abs(row[1]) <= SCALE && abs(row[2]) <= SCALE, eachrow(centered_locations))
 
-        # Select up to 20 closest available individuals
-        selected_for_point = sorted_indices[1:min(grid_points_per_sample, length(sorted_indices))]
-
-        # Mark these individuals as selected
-        all_selected[selected_for_point] .= true
-
-        push!(all_sampled_individuals, selected_for_point...)
-
-        # If we've reached 200 individuals, break early
-        if length(all_sampled_individuals) >= n_samples
-            break
-        end
-    end
-
-    # If we don't have enough individuals, sample remaining randomly from unselected
-    rng = MersenneTwister(seed)
-    if length(all_sampled_individuals) < n_samples
-        remaining_needed = n_samples - length(all_sampled_individuals)
-        remaining_indices = findall(!, all_selected)
-        additional_individuals = sample(rng, remaining_indices, remaining_needed, replace=false)
-        push!(all_sampled_individuals, additional_individuals...)
+    # Randomly sample up to n_samples individuals from those within the square
+    n_available = length(within_square)
+    if n_available >= n_samples
+        all_sampled_individuals = sample(rng, within_square, n_samples, replace=false)
+    else
+        @warn "Only $n_available individuals within square, sampling all of them"
+        all_sampled_individuals = within_square
     end
 
     nodes = reduce(vcat, [ts.individual(i - 1).nodes for i in all_sampled_individuals])
     ts = ts.simplify(samples=nodes)
 
-    df_dist, avg_axial = let
+    df_dist, mean_distance = let
         points = reduce(hcat, [collect(row) for row in ts.individual_locations])'
         dist_matrix = euclidean_distance(points)
         n = size(points, 1)
@@ -102,9 +78,9 @@ end
                 push!(df, (i - 1, j - 1, dist_matrix[i, j]))
             end
         end
-        # Compute average axial distance
-        avg_axial = mean_axial_distance(points)
-        df, avg_axial
+        # Compute mean pairwise distance
+        mean_dist = mean(df.distance)
+        df, mean_dist
     end
 
     # IBD blocks
@@ -196,7 +172,6 @@ end
     σ_row = coef_table[2, :]
     return DataFrame(
         Dict(
-            :D_obs => local_density_obs,
             :D_exp => local_density_exp,
             :D_est => D_row["Coef."],
             :D_std_error => D_row["Std. Error"],
@@ -208,23 +183,26 @@ end
             :NE => NE,
             :SD => SD,
             :SM => SM,
+            :SCALE => SCALE,
             :seed => seed,
-            :sample_size => n_samples,
+            :sample_size => length(all_sampled_individuals),
             :max_distance => maximum(df2.DISTANCE),
             :min_distance => minimum(df2.DISTANCE),
-            :mean_axial_distance => avg_axial,
+            :mean_distance => mean_distance,
         ),
     )
 end
 
 function main()
     # Simulation parameters
-    Ne_values = [500, 1000] # Number of individuals
+    Ne_values = [1000, 5000] # Number of individuals
     # Dispersal kernels
-    kernels_sd = exp10.(range(log10(0.05), stop=log10(6.0), length=40))
+    kernels_sd = exp10.(range(log10(0.05), stop=log10(6.0), length=30))
     # Spatial mating scale
     SM = 0.01
-    num_replicates = 3
+    # Sampling region scale
+    scale_values = [0.5, 1.0]
+    num_replicates = 1
     base_seed = 1000
 
     mkpath(OUTPUT_DIR)
@@ -232,16 +210,16 @@ function main()
     # Generate all parameter combinations
     # Each combination gets a unique seed based on parameters
     params = [
-        (NE=ne, SD=sd, SM=SM, seed=base_seed + i + j * 100 + k * 10000, replicate=k) for
-        (i, sd) in enumerate(kernels_sd) for (j, ne) in enumerate(Ne_values) for k in 1:num_replicates
+        (NE=ne, SD=sd, SM=SM, SCALE=scale, seed=base_seed + i + j * 100 + k * 10000 + m * 1000000, replicate=k) for
+        (i, sd) in enumerate(kernels_sd) for (j, ne) in enumerate(Ne_values) for (m, scale) in enumerate(scale_values) for k in 1:num_replicates
     ]
 
     @info "Starting $(length(params)) simulations across $(nprocs()-1) workers"
-    @info "Parameter space: $(length(Ne_values)) NE values × $(length(kernels_sd)) SD values × $(num_replicates) replicates"
+    @info "Parameter space: $(length(Ne_values)) NE values × $(length(kernels_sd)) SD values × $(length(scale_values)) SCALE values × $(num_replicates) replicates"
 
     results = pmap(params; on_error=identity) do p
-        @info "Worker $(myid()): Running NE=$(p.NE), SD=$(p.SD), replicate=$(p.replicate)"
-        df = simulation(p.NE, p.SD, p.SM, p.seed)
+        @info "Worker $(myid()): Running NE=$(p.NE), SD=$(p.SD), SCALE=$(p.SCALE), replicate=$(p.replicate)"
+        df = simulation(p.NE, p.SD, p.SM, p.SCALE, p.seed)
         df.replicate .= p.replicate
         df
     end
@@ -254,7 +232,6 @@ function main()
             push!(
                 valid_results,
                 DataFrame(
-                    :D_obs => NaN,
                     :D_exp => NaN,
                     :D_est => NaN,
                     :D_std_error => NaN,
@@ -266,11 +243,12 @@ function main()
                     :NE => params[i].NE,
                     :SD => params[i].SD,
                     :SM => params[i].SM,
+                    :SCALE => params[i].SCALE,
                     :seed => params[i].seed,
                     :sample_size => 0,
                     :max_distance => NaN,
                     :min_distance => NaN,
-                    :mean_axial_distance => NaN,
+                    :mean_distance => NaN,
                     :replicate => params[i].replicate,
                 ),
             )

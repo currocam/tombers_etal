@@ -8,15 +8,18 @@ initialize() {
 	initializeRecombinationRate(1e-8);
 	initializeMutationRate(0.0);
 	// Define constants:
-	defineConstantIfInteractive("NE", 500); // Number of individuals
+	defineConstantIfInteractive("NE", 5000); // Number of individuals
 	defineConstantIfInteractive("SM", 0.01); // Mate choice
-	defineConstantIfInteractive("SD", 0.2); // Dispersal
+	defineConstantIfInteractive("SD", 0.05); // Dispersal
+	defineConstant("SK", SM); // Density-selection
 	// Set up spatial interaction type
 	// Individuals within a small radious can mate
-	initializeInteractionType(1, "xy", reciprocal=T, maxDistance=SM);
-	i1.setInteractionFunction("f", 1.0);
-	defineConstant("RUNTIME", 10000);
-	defineConstant("GRANULARITY", 200);
+	initializeInteractionType(1, "xy", reciprocal=T, maxDistance=SM*3);
+	i1.setInteractionFunction("n", 1.0, SM);
+	initializeInteractionType(2, "xy", reciprocal=T, maxDistance=SK*3);
+	i2.setInteractionFunction("n", 1.0, SK);
+	defineConstant("RUNTIME", 1000);
+	defineConstant("GRANULARITY", 100);
 	defineGlobal("EMPIRICAL_DENSITY", float(RUNTIME));
 	defineGlobal("EMPIRICAL_DISPERSAL", float(RUNTIME));
 	defineConstantIfInteractive("OUTPATH", "out.trees");
@@ -44,7 +47,7 @@ modifyChild() {
 	p1.setSpatialBounds(c(-1, -1, 1, 1));
 	// Simple squared-like area
 	n = GRANULARITY * GRANULARITY;
-	habitat_suitability = ifelse(runif(n)<0.99, 0.0, 1.0);
+	habitat_suitability = ifelse(runif(n)<0.99, 0.01, 1.0);
 	habitat_suitability = matrix(habitat_suitability, ncol=GRANULARITY);
 	map = p1.defineSpatialMap("mapHabitat", "xy", habitat_suitability, interpolate=T,
 		valueRange=c(0.0, 1.0), colors=c("white", "black"));
@@ -52,6 +55,14 @@ modifyChild() {
 	defineConstant("FRACTION_SUITABILITY", mean(habitat_suitability));
 	p1.individuals.setSpatialPosition(p1.pointUniformWithMap(NE, HABITAT_MAP));
 	i1.evaluate(p1);
+}
+
+early() {
+	i2.evaluate(p1);
+	// spatial competition provides density-dependent selection
+	inds = p1.individuals;
+	competition = i2.localPopulationDensity(inds);
+	inds.fitnessScaling = p1.individualCount / competition;
 }
 
 
@@ -69,8 +80,11 @@ RUNTIME late() {
 	defineConstant("EXP_SIGMA", sqrt(SD^2 + SM^2 / 2));
 	defineConstant("OBS_SIGMA", mean(EMPIRICAL_DISPERSAL));
 	area = (p1.spatialBounds[2] - p1.spatialBounds[0]) * (p1.spatialBounds[3] - p1.spatialBounds[1]);
+    // This is the expected density if individuals are placed randomly (which are not)
 	defineConstant("EXP_D", NE / area);
+    // This is for debugging the meaning of effective density
 	defineConstant("OBS_D", mean(EMPIRICAL_DENSITY));
+
 
 	sim.treeSeqOutput(
 		OUTPATH,
