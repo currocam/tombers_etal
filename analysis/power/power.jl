@@ -17,7 +17,8 @@ end
 # %% Find MLE
 @model function power_density(df, contig_lengths)
     D ~ Uniform(0, 1)
-    β ~ Uniform(-3, 3)
+    # Derivatives when |β"| > 2 are very expensive, and MLE is far from the bounds.
+    β ~ Uniform(-2, 2)
     σ ~ Uniform(0, 1000)
     # Some custom parallelization
     rows = eachrow(df)
