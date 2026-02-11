@@ -17,21 +17,24 @@ end
 # %% Sigmoid transition
 sigmoid(x) = 1 / (1 + exp(-x))
 function De(t, θ)
-    D0, D1, t0 = θ
-    D0 + (D1 - D0) * sigmoid(10 * (t - t0))
+    D0, D1, t0, alpha = θ
+    res1 = D0 * exp(-alpha * t)
+    res2 = D1
+    res1 + (res2 - res1) * sigmoid(10 * (t - t0))
 end
 # %% Find MLE
 @model function piecewise_density(df, contig_lengths)
     D0 ~ Uniform(0, 1)
     D1 ~ Uniform(0, 1)
     t0 ~ Uniform(0, 500)
+    alpha ~ Uniform(-1, 1)
     σ ~ Uniform(0, 1000)
     # Some custom parallelization
     rows = eachrow(df)
     loglikes = map(rows) do row
         Threads.@spawn begin
             try
-                return composite_loglikelihood_custom(De, [D0, D1, t0], σ, DataFrame(row), contig_lengths)
+                return composite_loglikelihood_custom(De, [D0, D1, t0, alpha], σ, DataFrame(row), contig_lengths)
             catch e
                 return -Inf
             end
