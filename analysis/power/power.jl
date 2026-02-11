@@ -33,8 +33,13 @@ end
     end
     Turing.@addlogprob! sum(fetch.(loglikes))
 end
+function fit(m; n=3)
+    estimates = [maximum_a_posteriori(m) for _ in 1:n]
+    _, best = findmax(e -> e.lp, estimates)
+    return estimates[best]
+end
 m = power_density(df2_short, contig_lengths);
-mle_estimate = maximum_a_posteriori(m)
+mle_estimate = fit(m)
 coef_table = mle_estimate |> coeftable |> DataFrame
 select!(coef_table, Not(:z, Symbol("Pr(>|z|)")))
 # %% Save results
@@ -52,7 +57,7 @@ df2_long = let
     )
 end
 m = power_density(df2_long, contig_lengths);
-mle_estimate = maximum_a_posteriori(m)
+mle_estimate = fit(m)
 coef_table = mle_estimate |> coeftable |> DataFrame
 select!(coef_table, Not(:z, Symbol("Pr(>|z|)")))
 # %% Save results
