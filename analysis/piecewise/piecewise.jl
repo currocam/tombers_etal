@@ -14,10 +14,11 @@ df2_short = let
         :DISTANCE => mean => :DISTANCE,
     )
 end
-# %% Define piecewise constant dispersal function
+# %% Sigmoid transition
+sigmoid(x) = 1 / (1 + exp(-x))
 function De(t, θ)
     D0, D1, t0 = θ
-    t < t0 ? D0 : D1
+    D0 + (D1 - D0) * sigmoid(10 * (t - t0))
 end
 # %% Find MLE
 @model function piecewise_density(df, contig_lengths)
