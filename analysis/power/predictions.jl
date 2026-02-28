@@ -7,8 +7,8 @@ mle_long = CSV.read("long_mle.csv", DataFrame)
 # Constants
 contig_lengths = [0.57, 0.64, 0.52, 0.55, 0.49, 0.53, 0.52, 0.52, 0.57, 0.56, 0.45, 0.54, 0.67, 0.71, 0.59, 0.67, 0.57, 0.57, 0.58, 0.61, 0.54, 0.57, 0.59, 0.51]
 De(t, params) = params[1] * t^-params[2] # Custom De(t) parametrization
-grid_times = 0:0.5:150
-L = 2.5 / 100 # Smallest IBD block considered
+grid_times = 0:0.5:100
+L = 5.0 / 100 #Largest IBD block considered
 grid_r1 = [2.5, 20, 180] # Geographic distances in km
 grid_r2 = [100, 1000, 2000] # Geographic distances in km
 

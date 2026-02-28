@@ -16,11 +16,11 @@
 __generated_with = "0.19.9"
 
 # %%
-import pandas as pd
-import numpy as np
-import seaborn as sns
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 import scienceplots
+import seaborn as sns
 
 plt.style.use("science")
 
@@ -94,14 +94,14 @@ plt.close()
 # %%
 data2 = pd.read_csv("analysis/constant/short_predictions.csv")
 data2["BIN_INDEX"] = data2["BIN_INDEX"].map(
-    {1: "0.4-1.0 cM", 2: "1.0-2.5 cM", 3: "2.5-4.0 cM"}
+    {1: "0.4-1.0 cM", 2: "1.0-2.5 cM", 3: "2.5-5.0 cM"}
 )
 data2
 
 # %%
 data3 = pd.read_csv("analysis/constant/long_predictions.csv")
 data3["BIN_INDEX"] = data3["BIN_INDEX"].map(
-    {1: "0.4-1.0 cM", 2: "1.0-2.5 cM", 3: "2.5-4.0 cM"}
+    {1: "0.4-1.0 cM", 2: "1.0-2.5 cM", 3: "2.5-5.0 cM"}
 )
 data3
 
@@ -123,11 +123,11 @@ data2["lower_pred"] = lower_pred
 data2["upper_pred"] = upper_pred
 
 # %%
-palette = {"0.4-1.0 cM": "C3", "1.0-2.5 cM": "C0", "2.5-4.0 cM": "C1"}
+palette = {"0.4-1.0 cM": "C3", "1.0-2.5 cM": "C0", "2.5-5.0 cM": "C1"}
 
 # %%
 fig3, ax3 = plt.subplots(figsize=set_size(240), dpi=300)
-for i, label in enumerate(["0.4-1.0 cM", "1.0-2.5 cM", "2.5-4.0 cM"]):
+for i, label in enumerate(["0.4-1.0 cM", "1.0-2.5 cM", "2.5-5.0 cM"]):
     subset = data2[data2["BIN_INDEX"] == label]
     subset = data2[data2["BIN_INDEX"] == label].sort_values("distance_bin")
     g1 = sns.lineplot(
@@ -178,7 +178,7 @@ data3["upper_pred"] = upper_pred2
 
 # %%
 fig4, ax4 = plt.subplots(figsize=set_size(240), dpi=300)
-for j, label2 in enumerate(["0.4-1.0 cM", "1.0-2.5 cM", "2.5-4.0 cM"]):
+for j, label2 in enumerate(["0.4-1.0 cM", "1.0-2.5 cM", "2.5-5.0 cM"]):
     subset2 = data3[data3["BIN_INDEX"] == label2]
     subset2 = data3[data3["BIN_INDEX"] == label2].sort_values("distance_bin")
     g3 = sns.lineplot(
