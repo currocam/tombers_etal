@@ -7,7 +7,7 @@ df_short = CSV.read("../short_data.csv", DataFrame);
 df_short = df_short[df_short.IBD_LEFT.>=0.01, :]
 contig_lengths = [0.57, 0.64, 0.52, 0.55, 0.49, 0.53, 0.52, 0.52, 0.57, 0.56, 0.45, 0.54, 0.67, 0.71, 0.59, 0.67, 0.57, 0.57, 0.58, 0.61, 0.54, 0.57, 0.59, 0.51];
 df2_short = let
-    df_short.DISTANCE_INDEX = ceil.(df_short.DISTANCE ./ 5)
+    df_short.DISTANCE_INDEX = ceil.(df_short.DISTANCE ./ 1)
     combine(
         groupby(df_short, [:DISTANCE_INDEX, :IBD_LEFT, :IBD_RIGHT]),
         :NR_PAIRS => sum => :NR_PAIRS,
@@ -44,7 +44,7 @@ df_long = CSV.read("../long_data.csv", DataFrame);
 df_long = df_long[df_long.IBD_LEFT.>=0.01, :]
 
 df2_long = let
-    df_long.DISTANCE_INDEX = ceil.(df_long.DISTANCE ./ 5)
+    df_long.DISTANCE_INDEX = ceil.(df_long.DISTANCE ./ 10)
     combine(
         groupby(df_long, [:DISTANCE_INDEX, :IBD_LEFT, :IBD_RIGHT]),
         :NR_PAIRS => sum => :NR_PAIRS,
