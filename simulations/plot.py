@@ -53,61 +53,74 @@ data
 # %%
 from scipy.stats import pearsonr
 
-fig, axes = plt.subplots(
-    2, 1, figsize=set_size(240, subplots=(2, 1)), dpi=300, sharey=True
-)
-# Get unique scales
+# --- Dispersal plots for each model ---
+models = {
+    "constant": {"σ_col": "σ_est", "title_suffix": "(Constant density)"},
+    "power": {"σ_col": "σ_est_power", "title_suffix": "(Power-law density)"},
+}
+
 scales = data["SCALE"].unique()
 palette = ["C0", "C1"]
-labels = [r"Sampling area $0.5 \times 0.5$", r"Sampling area $1.0 \times 1.0$"]
+scale_labels = [r"Sampling area $0.5 \times 0.5$", r"Sampling area $1.0 \times 1.0$"]
 
-for idx, scale in enumerate(scales):
-    ax = axes[idx]
-    # Filter data for this scale
-    scale_data = data[data["SCALE"] == scale]
-
-    # Calculate Pearson correlation
-    corr, p_value = pearsonr(scale_data["σ_obs"], scale_data["σ_est"])
-
-    # Create scatter plot
-    sns.scatterplot(data=scale_data, x="σ_obs", y="σ_est", ax=ax, color=palette[idx])
-    sns.lineplot(data=scale_data, x="σ_obs", y="σ_obs", ax=ax, color="black")
-    # Add identity line
-    l1 = ax.axhline(scale / 2, color="grey", linestyle="--")
-    labelLine(
-        l1,
-        0.09,
-        label=f"$\\sigma={scale / 2}$",
-        align=True,
-        color="black",
-        backgroundcolor="white",
+for model_name, model_info in models.items():
+    σ_col = model_info["σ_col"]
+    fig, axes = plt.subplots(
+        2, 1, figsize=set_size(240, subplots=(2, 1)), dpi=300, sharey=True
     )
 
-    # Add correlation text in bottom right corner
-    ax.text(
-        0.95,
-        0.05,
-        f"$\\footnotesize\\text{{Pearson's }} r = {corr:.2f}$",
-        transform=ax.transAxes,
-        ha="right",
-        va="bottom",
-    )
+    for idx, scale in enumerate(scales):
+        ax = axes[idx]
+        scale_data = data[data["SCALE"] == scale].dropna(subset=[σ_col])
 
-    # Set labels and scale
-    ax.set_xlabel("Ground truth dispersal $\sigma$")
-    ax.set_ylabel(r"Estimated dispersal $\displaystyle \sigma_{\text{MLE}}$")
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.set_title(labels[idx])
+        corr, p_value = pearsonr(scale_data["σ_obs"], scale_data[σ_col])
 
-plt.tight_layout()
-plt.savefig("simulations/estimated_dispersal.pdf")
-plt.show()
+        sns.scatterplot(
+            data=scale_data, x="σ_obs", y=σ_col, ax=ax, color=palette[idx]
+        )
+        sns.lineplot(data=scale_data, x="σ_obs", y="σ_obs", ax=ax, color="black")
+        l1 = ax.axhline(scale / 2, color="grey", linestyle="--")
+        labelLine(
+            l1,
+            0.09,
+            label=f"$\\sigma={scale / 2}$",
+            align=True,
+            color="black",
+            backgroundcolor="white",
+        )
 
-# %%
-fig2, ax2 = plt.subplots(figsize=set_size(240), dpi=300)
-sns.scatterplot(data=data, x="σ_obs", y="D_est", hue="D_exp", ax=ax2, color="C1")
-plt.xlabel(r"Ground truth dispersal $\sigma$")
-plt.ylabel(r"Estimated effective density")
-plt.title("Effect dispersal rate in estimated density")
-plt.show()
+        ax.text(
+            0.95,
+            0.05,
+            f"$\\footnotesize\\text{{Pearson's }} r = {corr:.2f}$",
+            transform=ax.transAxes,
+            ha="right",
+            va="bottom",
+        )
+
+        ax.set_xlabel("Ground truth dispersal $\sigma$")
+        ax.set_ylabel(r"Estimated dispersal $\displaystyle \sigma_{\text{MLE}}$")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.set_title(f"{scale_labels[idx]} {model_info['title_suffix']}")
+
+    plt.tight_layout()
+    plt.savefig(f"simulations/estimated_dispersal_{model_name}.pdf")
+    plt.show()
+
+# --- Density plots for each model ---
+density_models = {
+    "constant": {"D_col": "D_est", "title": "Effect of dispersal rate on estimated density (Constant)"},
+    "power": {"D_col": "D_est_power", "title": "Effect of dispersal rate on estimated density (Power-law)"},
+}
+
+for model_name, model_info in density_models.items():
+    D_col = model_info["D_col"]
+    plot_data = data.dropna(subset=[D_col])
+    fig2, ax2 = plt.subplots(figsize=set_size(240), dpi=300)
+    sns.scatterplot(data=plot_data, x="σ_obs", y=D_col, hue="D_exp", ax=ax2, color="C1")
+    plt.xlabel(r"Ground truth dispersal $\sigma$")
+    plt.ylabel(r"Estimated effective density")
+    plt.title(model_info["title"])
+    plt.savefig(f"simulations/estimated_density_{model_name}.pdf")
+    plt.show()

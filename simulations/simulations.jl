@@ -170,15 +170,80 @@ end
     coef_table = mle_estimate |> coeftable |> DataFrame
     D_row = coef_table[1, :]
     σ_row = coef_table[2, :]
+
+    # --- Fit power-law model ---
+    @model function power_density(df, contig_lengths)
+        D ~ Uniform(0, 10000)
+        β ~ Uniform(-1, 1)
+        σ ~ Uniform(0, 500.0)
+        rows = eachrow(df)
+        loglikes = map(rows) do row
+            Threads.@spawn begin
+                try
+                    return composite_loglikelihood_power_density(D, β, σ, DataFrame(row), contig_lengths)
+                catch e
+                    return -Inf
+                end
+            end
+        end
+        Turing.@addlogprob! sum(fetch.(loglikes))
+    end
+
+    m_power = power_density(df2, contig_lengths)
+    best_mle_power = nothing
+    best_lp_power = -Inf
+    for i in 1:n_starts
+        try
+            init_D = rand(rng) * 10000
+            init_β = rand(rng) * 2 - 1
+            init_σ = rand(rng) * 500
+            mle_result = maximum_a_posteriori(m_power; initial_params=[init_D, init_β, init_σ])
+            if mle_result.lp > best_lp_power
+                best_lp_power = mle_result.lp
+                best_mle_power = mle_result
+            end
+        catch e
+            @warn "Power MLE attempt $i failed: $e"
+        end
+    end
+
+    # Extract power-law estimates (NaN if all attempts failed)
+    if best_mle_power !== nothing
+        coef_power = best_mle_power |> coeftable |> DataFrame
+        D_power_row = coef_power[1, :]
+        β_row = coef_power[2, :]
+        σ_power_row = coef_power[3, :]
+        D_est_power = D_power_row["Coef."]
+        D_std_error_power = D_power_row["Std. Error"]
+        β_est = β_row["Coef."]
+        β_std_error = β_row["Std. Error"]
+        σ_est_power = σ_power_row["Coef."]
+        σ_std_error_power = σ_power_row["Std. Error"]
+    else
+        @warn "All power-law MLE attempts failed, setting power-law columns to NaN"
+        D_est_power = NaN
+        D_std_error_power = NaN
+        β_est = NaN
+        β_std_error = NaN
+        σ_est_power = NaN
+        σ_std_error_power = NaN
+    end
+
     return DataFrame(
         Dict(
             :D_exp => local_density_exp,
             :D_est => D_row["Coef."],
             :D_std_error => D_row["Std. Error"],
+            :D_est_power => D_est_power,
+            :D_std_error_power => D_std_error_power,
+            :β_est => β_est,
+            :β_std_error => β_std_error,
             :σ_obs => dispersal_rate_obs,
             :σ_exp => dispersal_rate_exp,
             :σ_est => σ_row["Coef."],
             :σ_std_error => σ_row["Std. Error"],
+            :σ_est_power => σ_est_power,
+            :σ_std_error_power => σ_std_error_power,
             :status => "success",
             :NE => NE,
             :SD => SD,
@@ -235,10 +300,16 @@ function main()
                     :D_exp => NaN,
                     :D_est => NaN,
                     :D_std_error => NaN,
+                    :D_est_power => NaN,
+                    :D_std_error_power => NaN,
+                    :β_est => NaN,
+                    :β_std_error => NaN,
                     :σ_obs => NaN,
                     :σ_exp => NaN,
                     :σ_est => NaN,
                     :σ_std_error => NaN,
+                    :σ_est_power => NaN,
+                    :σ_std_error_power => NaN,
                     :status => "exception: $(sprint(showerror, r))",
                     :NE => params[i].NE,
                     :SD => params[i].SD,
