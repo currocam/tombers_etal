@@ -1,24 +1,16 @@
-using CSV, DataFrames, IdentityByDescentDispersal, Turing, StatsBase, Random
+using CSV, DataFrames, IdentityByDescentDispersal, Turing, StatsBase, Random, CodecZlib, DelimitedFiles
 using Base.Threads
 # %% Set seed for reproducibility
 Random.seed!(8376128)
-# %% Load data
-df_short = CSV.read("../short_data.csv", DataFrame);
-contig_lengths = [0.57, 0.64, 0.52, 0.55, 0.49, 0.53, 0.52, 0.52, 0.57, 0.56, 0.45, 0.54, 0.67, 0.71, 0.59, 0.67, 0.57, 0.57, 0.58, 0.61, 0.54, 0.57, 0.59, 0.51];
-df2_short = let
-    df_short.DISTANCE_INDEX = ceil.(df_short.DISTANCE ./ 5)
-    combine(
-        groupby(df_short, [:DISTANCE_INDEX, :IBD_LEFT, :IBD_RIGHT]),
-        :NR_PAIRS => sum => :NR_PAIRS,
-        :COUNT => sum => :COUNT,
-        :DISTANCE => mean => :DISTANCE,
-    )
-end
+# %% Read preprocessed data
+contig_lengths = vec(readdlm(GzipDecompressorStream(open("../../data/input_contig_lengths.txt.gz")), ',', Float64, '\n'))
+df_short = CSV.read(GzipDecompressorStream(open("../short_data.csv.gz")), DataFrame)
+df_long = CSV.read(GzipDecompressorStream(open("../long_data.csv.gz")), DataFrame)
+
 # %% Find MLE
 @model function power_density(df, contig_lengths)
     D ~ Uniform(0, 1)
-    # Derivatives when |β"| > 2 are very expensive, and MLE is far from the bounds.
-    β ~ Uniform(-2, 2)
+    β ~ Uniform(-1, 1)
     σ ~ Uniform(0, 1000)
     # Some custom parallelization
     rows = eachrow(df)
@@ -33,31 +25,16 @@ end
     end
     Turing.@addlogprob! sum(fetch.(loglikes))
 end
-function fit(m; n=3)
-    estimates = [maximum_a_posteriori(m) for _ in 1:n]
-    _, best = findmax(e -> e.lp, estimates)
-    return estimates[best]
-end
-m = power_density(df2_short, contig_lengths);
-mle_estimate = fit(m)
+m = power_density(df_short, contig_lengths);
+mle_estimate = maximum_a_posteriori(m)
 coef_table = mle_estimate |> coeftable |> DataFrame
 select!(coef_table, Not(:z, Symbol("Pr(>|z|)")))
 # %% Save results
 CSV.write("short_mle.csv", coef_table)
 
 # %% Repeat with the long dataset
-df_long = CSV.read("../long_data.csv", DataFrame);
-df2_long = let
-    df_long.DISTANCE_INDEX = ceil.(df_long.DISTANCE ./ 5)
-    combine(
-        groupby(df_long, [:DISTANCE_INDEX, :IBD_LEFT, :IBD_RIGHT]),
-        :NR_PAIRS => sum => :NR_PAIRS,
-        :COUNT => sum => :COUNT,
-        :DISTANCE => mean => :DISTANCE,
-    )
-end
-m = power_density(df2_long, contig_lengths);
-mle_estimate = fit(m)
+m = power_density(df_long, contig_lengths);
+mle_estimate = maximum_a_posteriori(m)
 coef_table = mle_estimate |> coeftable |> DataFrame
 select!(coef_table, Not(:z, Symbol("Pr(>|z|)")))
 # %% Save results

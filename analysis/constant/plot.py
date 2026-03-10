@@ -25,13 +25,10 @@ import seaborn as sns
 plt.style.use("science")
 
 # %%
-pd.read_csv("analysis/constant/predictions_age_ibd.csv")["distance_km"].unique()
-
-# %%
 data = pd.read_csv("analysis/constant/predictions_age_ibd.csv")
 data = data.dropna()
 data["distance_km"] = [f"{x:01} km" for x in data["distance_km"]]
-data
+print(data)
 
 
 # %%
@@ -48,9 +45,6 @@ def set_size(width, fraction=1):
     fig_height_in = fig_width_in * golden_ratio
     return fig_width_in, fig_height_in
 
-
-# %%
-data[data.scale == "long"]["distance_km"].unique()
 
 # %%
 fig1, ax1 = plt.subplots(figsize=set_size(240, fraction=1.0), dpi=300)
@@ -102,23 +96,15 @@ plt.close()
 
 # %%
 data2 = pd.read_csv("analysis/constant/short_predictions.csv")
-data2["BIN_INDEX"] = data2["BIN_INDEX"].map(
-    {1: "0.4-1.0 cM", 2: "1.0-2.5 cM", 3: "2.5-5.0 cM"}
-)
-# We exclude the 0.4-1.0 cM bin as we did when computing the MLE
-data2 = data2[data2["BIN_INDEX"] != "0.4-1.0 cM"]
-data2
+data2["BIN_INDEX"] = data2["BIN_INDEX"].map({1: "1.0-2.5 cM", 2: "2.5-5.0 cM"})
+print(data2)
 
 # %%
 data3 = pd.read_csv("analysis/constant/long_predictions.csv")
-data3["BIN_INDEX"] = data3["BIN_INDEX"].map(
-    {1: "0.4-1.0 cM", 2: "1.0-2.5 cM", 3: "2.5-5.0 cM"}
-)
-# We exclude the 0.4-1.0 cM bin as we did when computing the MLE
-data3 = data3[data3["BIN_INDEX"] != "0.4-1.0 cM"]
-data3
+data3["BIN_INDEX"] = data3["BIN_INDEX"].map({1: "1.0-2.5 cM", 2: "2.5-5.0 cM"})
+print(data3)
 
-# %%
+# %% Add predictions from the model
 import scipy.stats
 
 rng = np.random.default_rng(1234)
@@ -177,7 +163,7 @@ plt.xlabel("Geographic distance (kilometers)")
 plt.savefig("analysis/constant/predictions_short.pdf")
 plt.show()
 
-# %%
+# %% Same but with the long-scale predictions
 n2 = data3.shape[0]
 pred_conf2 = np.array(
     [

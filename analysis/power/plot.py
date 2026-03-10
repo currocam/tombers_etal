@@ -53,57 +53,62 @@ def set_size(width, fraction=1):
 data[data.scale == "long"]["distance_km"].unique()
 
 # %%
-data
-
-# %%
-fig1, ax1 = plt.subplots(figsize=set_size(240), dpi=300)
+fig1, ax1 = plt.subplots(figsize=set_size(240, fraction=1.0), dpi=300)
 
 sns.lineplot(
     data=data[data.scale == "short"],
     x="time",
     y="density",
     hue="distance_km",
+    style="bin",
     ax=ax1,
     palette=["C0", "C1", "C2"],
 )
-ax1.legend(title="")
+handles1, labels1 = ax1.get_legend_handles_labels()
+ax1.legend(
+    handles=[handles1[i] for i in [1, 2, 3, 5, 6]],
+    labels=[labels1[i] for i in [1, 2, 3, 5, 6]],
+)
 plt.ylabel("Density of expected shared \n   blocks per pair and Morgan")
 plt.xlabel("Time (generations ago)")
+plt.xlim(0, 300)
 plt.savefig("analysis/power/age_ibd_short_scale.pdf")
 plt.show()
 plt.close()
 
 # %%
-fig2, ax2 = plt.subplots(figsize=set_size(240), dpi=300)
+fig2, ax2 = plt.subplots(figsize=set_size(240, fraction=1.0), dpi=300)
 
 sns.lineplot(
     data=data[data.scale == "long"],
     x="time",
     y="density",
     hue="distance_km",
+    style="bin",
     ax=ax2,
     palette=["C3", "C4", "C5"],
 )
-ax2.legend(title="")
+handles2, labels2 = ax2.get_legend_handles_labels()
+ax2.legend(
+    handles=[handles2[i] for i in [1, 2, 3, 5, 6]],
+    labels=[labels2[i] for i in [1, 2, 3, 5, 6]],
+)
 plt.ylabel("Density of expected shared \n   blocks per pair and Morgan")
 plt.xlabel("Time (generations ago)")
+plt.xlim(0, 300)
 plt.savefig("analysis/power/age_ibd_long_scale.pdf")
 plt.show()
 plt.close()
 
 # %%
 data2 = pd.read_csv("analysis/power/short_predictions.csv")
-data2["BIN_INDEX"] = data2["BIN_INDEX"].map(
-    {1: "0.4-1.0 cM", 2: "1.0-2.5 cM", 3: "2.5-5.0 cM"}
-)
-data2
+data2["BIN_INDEX"] = data2["BIN_INDEX"].map({1: "1.0-2.5 cM", 2: "2.5-5.0 cM"})
+print(data2)
 
 # %%
 data3 = pd.read_csv("analysis/power/long_predictions.csv")
-data3["BIN_INDEX"] = data3["BIN_INDEX"].map(
-    {1: "0.4-1.0 cM", 2: "1.0-2.5 cM", 3: "2.5-5.0 cM"}
-)
-data3
+data3["BIN_INDEX"] = data3["BIN_INDEX"].map({1: "1.0-2.5 cM", 2: "2.5-5.0 cM"})
+print(data3)
 
 # %%
 import scipy.stats
@@ -123,11 +128,11 @@ data2["lower_pred"] = lower_pred
 data2["upper_pred"] = upper_pred
 
 # %%
-palette = {"0.4-1.0 cM": "C3", "1.0-2.5 cM": "C0", "2.5-5.0 cM": "C1"}
+palette = {"1.0-2.5 cM": "C0", "2.5-5.0 cM": "C1"}
 
 # %%
 fig3, ax3 = plt.subplots(figsize=set_size(240), dpi=300)
-for i, label in enumerate(["0.4-1.0 cM", "1.0-2.5 cM", "2.5-5.0 cM"]):
+for i, label in enumerate(["1.0-2.5 cM", "2.5-5.0 cM"]):
     subset = data2[data2["BIN_INDEX"] == label]
     subset = data2[data2["BIN_INDEX"] == label].sort_values("distance_bin")
     g1 = sns.lineplot(
@@ -178,7 +183,7 @@ data3["upper_pred"] = upper_pred2
 
 # %%
 fig4, ax4 = plt.subplots(figsize=set_size(240), dpi=300)
-for j, label2 in enumerate(["0.4-1.0 cM", "1.0-2.5 cM", "2.5-5.0 cM"]):
+for j, label2 in enumerate(["1.0-2.5 cM", "2.5-5.0 cM"]):
     subset2 = data3[data3["BIN_INDEX"] == label2]
     subset2 = data3[data3["BIN_INDEX"] == label2].sort_values("distance_bin")
     g3 = sns.lineplot(

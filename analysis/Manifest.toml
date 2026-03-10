@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.12.4"
+julia_version = "1.12.3"
 manifest_format = "2.0"
-project_hash = "30425d7ccaa4aa45c01c09b212355034afb08212"
+project_hash = "340e90676c3e1ba8356795324dcc869fe15db27c"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "f7304359109c768cf32dc5fa2d371565bb63b68a"
@@ -693,11 +693,9 @@ version = "0.3.28"
 
 [[deps.IdentityByDescentDispersal]]
 deps = ["BesselK", "DataAPI", "DataFrames", "Distributions", "HCubature", "QuadGK", "Tables"]
-git-tree-sha1 = "11526ba1b9a4ffb67a02c4e4c0c987f0a6fd308d"
-repo-rev = "main"
-repo-url = "https://github.com/currocam/IdentityByDescentDispersal.jl"
+git-tree-sha1 = "2da3b56c71767e893fabfd281ab6135a0ad853b8"
 uuid = "270ed24e-ac4d-5dce-b70a-bd124b3b694a"
-version = "0.1.5"
+version = "1.0.0"
 
 [[deps.InitialValues]]
 git-tree-sha1 = "4da0f88e9a39111c2fa3add390ab15f3a44f3ca3"
