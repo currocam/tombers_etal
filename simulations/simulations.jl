@@ -133,7 +133,7 @@ end
                 contig_lengths,
             )
         catch e
-            @warn "Error in constant_density model: $e"
+            @warn "Error in constant_density model: $e D=$(ForwardDiff.value(D)) σ=$(ForwardDiff.value(σ))"
             Turing.@addlogprob! -Inf
         end
     end
@@ -174,19 +174,15 @@ end
     # --- Fit power-law model ---
     @model function power_density(df, contig_lengths)
         D ~ Uniform(0, 10000)
-        β ~ Uniform(-1, 1)
+        β ~ Uniform(-2, 2)
         σ ~ Uniform(0, 500.0)
-        rows = eachrow(df)
-        loglikes = map(rows) do row
-            Threads.@spawn begin
-                try
-                    return composite_loglikelihood_power_density(D, β, σ, DataFrame(row), contig_lengths)
-                catch e
-                    return -Inf
-                end
-            end
+        try
+            Turing.@addlogprob! composite_loglikelihood_power_density(D, β, σ, df, contig_lengths)
+        catch e
+            @warn "Error in power_density model: $e D=$(ForwardDiff.value(D)) β=$(ForwardDiff.value(β)) σ=$(ForwardDiff.value(σ))"
+            Turing.@addlogprob! -Inf
+            return
         end
-        Turing.@addlogprob! sum(fetch.(loglikes))
     end
 
     m_power = power_density(df2, contig_lengths)
