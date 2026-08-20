@@ -47,22 +47,56 @@ def set_size(width, fraction=1):
 
 
 # %%
+# Hack to split the legend into two keys
+def dist_order(subset):
+    return sorted(subset["distance_km"].unique(), key=lambda s: float(s.split()[0]))
+
+
+def split_legend(ax, dist_labels, bin_labels):
+    handles, labels = ax.get_legend_handles_labels()
+    lookup = dict(zip(labels, handles))
+    leg_dist = ax.legend(
+        [lookup[k] for k in dist_labels],
+        dist_labels,
+        title="Distance",
+        loc="upper right",
+        fontsize="small",
+        title_fontsize="small",
+    )
+    ax.add_artist(leg_dist)
+    # Stack the second key right below the first one
+    ax.figure.canvas.draw()
+    bottom = leg_dist.get_window_extent().transformed(ax.transAxes.inverted()).y0
+    ax.legend(
+        [lookup[k] for k in bin_labels],
+        bin_labels,
+        title="Block length",
+        loc="upper right",
+        bbox_to_anchor=(1.0, bottom),
+        fontsize="small",
+        title_fontsize="small",
+    )
+
+
+# %%
 fig1, ax1 = plt.subplots(figsize=set_size(240, fraction=1.0), dpi=300)
 
+sub_ax1 = data[data.scale == "short"]
+order_ax1 = dist_order(sub_ax1)
+bins_ax1 = sorted(sub_ax1["bin"].unique())
+
 sns.lineplot(
-    data=data[data.scale == "short"],
+    data=sub_ax1,
     x="time",
     y="density",
     hue="distance_km",
+    hue_order=order_ax1,
     style="bin",
+    style_order=bins_ax1,
     ax=ax1,
     palette=["C0", "C1", "C2"],
 )
-handles1, labels1 = ax1.get_legend_handles_labels()
-ax1.legend(
-    handles=[handles1[i] for i in [1, 2, 3, 5, 6]],
-    labels=[labels1[i] for i in [1, 2, 3, 5, 6]],
-)
+split_legend(ax1, order_ax1, bins_ax1)
 plt.ylabel("Density of expected shared \n   blocks per pair and Morgan")
 plt.xlabel("Time (generations ago)")
 plt.xlim(0, 200)
@@ -73,20 +107,22 @@ plt.close()
 # %%
 fig2, ax2 = plt.subplots(figsize=set_size(240), dpi=300)
 
+sub_ax2 = data[data.scale == "long"]
+order_ax2 = dist_order(sub_ax2)
+bins_ax2 = sorted(sub_ax2["bin"].unique())
+
 sns.lineplot(
-    data=data[data.scale == "long"],
+    data=sub_ax2,
     x="time",
     y="density",
     hue="distance_km",
+    hue_order=order_ax2,
     style="bin",
+    style_order=bins_ax2,
     ax=ax2,
     palette=["C3", "C4", "C5"],
 )
-handles2, labels2 = ax2.get_legend_handles_labels()
-ax2.legend(
-    handles=[handles2[i] for i in [1, 2, 3, 5, 6]],
-    labels=[labels2[i] for i in [1, 2, 3, 5, 6]],
-)
+split_legend(ax2, order_ax2, bins_ax2)
 plt.ylabel("Density of expected shared \n   blocks per pair and Morgan")
 plt.xlabel("Time (generations ago)")
 plt.xlim(0, 200)
@@ -125,43 +161,55 @@ data2["upper_pred"] = upper_pred
 palette = {"1.0-2.5 cM": "C0", "2.5-5.0 cM": "C1"}
 
 # %%
-fig3, ax3 = plt.subplots(figsize=set_size(240), dpi=300)
-for i, label in enumerate(["1.0-2.5 cM", "2.5-5.0 cM"]):
-    subset = data2[data2["BIN_INDEX"] == label]
-    subset = data2[data2["BIN_INDEX"] == label].sort_values("distance_bin")
-    g1 = sns.lineplot(
-        data=subset,
-        x="distance_bin",
-        y="prediction",
-        ax=ax3,
-        color=palette[label],
-        label=label,
-    )
-    ax3.fill_between(
-        subset["distance_bin"],
-        subset["lower_pred"],
-        subset["upper_pred"],
-        color=palette[label],
-        alpha=0.2,
-        linewidth=0,
-    )
-    ax3.errorbar(
-        subset["distance_bin"],
-        subset["mean"],
-        yerr=[subset["mean"] - subset["lower"], subset["upper"] - subset["mean"]],
-        fmt="o",
-        color=palette[label],
-        solid_capstyle="round",
-        zorder=1,
-        linewidth=1,
-        markersize=2,
-    )
-ax3.legend([])
-fig3.legend(title="", loc="outside lower center", ncol=3, bbox_to_anchor=(0.5, 0.9))
-plt.ylabel("Number of shared IBD blocks")
-plt.xlabel("Geographic distance (kilometers)")
-plt.savefig("analysis/constant/predictions_short.pdf")
-plt.show()
+def plot_predictions(df, filename, log=False):
+    fig, ax = plt.subplots(figsize=set_size(240), dpi=300)
+    for label in ["1.0-2.5 cM", "2.5-5.0 cM"]:
+        subset = df[df["BIN_INDEX"] == label].sort_values("distance_bin")
+        sns.lineplot(
+            data=subset,
+            x="distance_bin",
+            y="prediction",
+            ax=ax,
+            color=palette[label],
+            label=label,
+        )
+        ax.fill_between(
+            subset["distance_bin"],
+            subset["lower_pred"],
+            subset["upper_pred"],
+            color=palette[label],
+            alpha=0.2,
+            linewidth=0,
+        )
+        ax.errorbar(
+            subset["distance_bin"],
+            subset["mean"],
+            yerr=[subset["mean"] - subset["lower"], subset["upper"] - subset["mean"]],
+            fmt="o",
+            color=palette[label],
+            solid_capstyle="round",
+            zorder=1,
+            linewidth=1,
+            markersize=2,
+        )
+    ax.legend([])
+    fig.legend(title="", loc="outside lower center", ncol=3, bbox_to_anchor=(0.5, 0.9))
+    if log:
+        ax.set_yscale("log")
+        plt.ylabel("Number of shared \n IBD blocks (log-scale)")
+    else:
+        plt.ylabel("Number of shared IBD blocks")
+    plt.xlabel("Geographic distance (kilometers)")
+    plt.savefig(filename)
+    plt.show()
+    plt.close()
+
+
+# %%
+plot_predictions(data2, "analysis/constant/predictions_short.pdf")
+
+# %%
+plot_predictions(data2, "analysis/constant/predictions_log_short.pdf", log=True)
 
 # %% Same but with the long-scale predictions
 n2 = data3.shape[0]
@@ -176,41 +224,7 @@ data3["lower_pred"] = lower_pred2
 data3["upper_pred"] = upper_pred2
 
 # %%
-fig4, ax4 = plt.subplots(figsize=set_size(240), dpi=300)
-for j, label2 in enumerate(["1.0-2.5 cM", "2.5-5.0 cM"]):
-    subset2 = data3[data3["BIN_INDEX"] == label2]
-    subset2 = data3[data3["BIN_INDEX"] == label2].sort_values("distance_bin")
-    g3 = sns.lineplot(
-        data=subset2,
-        x="distance_bin",
-        y="prediction",
-        ax=ax4,
-        color=palette[label2],
-        label=label2,
-    )
-    ax4.fill_between(
-        subset2["distance_bin"],
-        subset2["lower_pred"],
-        subset2["upper_pred"],
-        color=palette[label2],
-        alpha=0.2,
-        linewidth=0,
-    )
-    ax4.errorbar(
-        subset2["distance_bin"],
-        subset2["mean"],
-        yerr=[subset2["mean"] - subset2["lower"], subset2["upper"] - subset2["mean"]],
-        fmt="o",
-        color=palette[label2],
-        solid_capstyle="round",
-        zorder=1,
-        linewidth=1,
-        markersize=2,
-    )
-ax4.legend([])
-fig4.legend(title="", loc="outside lower center", ncol=3, bbox_to_anchor=(0.5, 0.9))
+plot_predictions(data3, "analysis/constant/predictions_long.pdf")
 
-plt.ylabel("Number of shared IBD blocks")
-plt.xlabel("Geographic distance (kilometers)")
-plt.savefig("analysis/constant/predictions_long.pdf")
-plt.show()
+# %%
+plot_predictions(data3, "analysis/constant/predictions_log_long.pdf", log=True)
